@@ -688,9 +688,10 @@ public final class DBUtils {
     @Nullable
     public static Object getAttributeValue(
         @NotNull DBDAttributeBinding attribute,
-        DBDAttributeBinding[] allAttributes,
-        Object[] row) {
-        return getAttributeValue(attribute, allAttributes, row, null);
+        @NotNull DBDAttributeBinding[] allAttributes,
+        @NotNull Object[] row
+    ) {
+        return getAttributeValue(attribute, allAttributes, row, null, false);
     }
 
     @Nullable
@@ -698,7 +699,8 @@ public final class DBUtils {
         @NotNull DBDAttributeBinding attribute,
         @NotNull DBDAttributeBinding[] allAttributes,
         @NotNull Object[] row,
-        @Nullable int[] nestedIndexes
+        @Nullable int[] nestedIndexes,
+        boolean retrieveDeepestCollectionElement
     ) {
         if (attribute.isCustom()) {
             try {
@@ -722,78 +724,50 @@ public final class DBUtils {
             return null;
         }
 
+        int remainingIndices = nestedIndexes != null ? nestedIndexes.length : 0;
+        int remainingAttributes = depth;
         Object curValue = row[index];
-        int curNestedIndex = 0;
 
-        for (int i = 0; i < depth; i++) {
+        while (remainingAttributes > 0 || remainingIndices > 0 || retrieveDeepestCollectionElement) {
             if (curValue == null) {
                 break;
             }
-            final DBDAttributeBinding parent = Objects.requireNonNull(attribute.getParent(depth - i - 1));
 
-            try {
-                int fixedNestedIndex = curNestedIndex;
-                if (nestedIndexes != null && fixedNestedIndex >= nestedIndexes.length) {
-                    fixedNestedIndex = nestedIndexes.length - 1;
-                    //return DBDVoid.INSTANCE;
+            if (!(curValue instanceof DBDCollection)) {
+                if (remainingAttributes == 0) {
+                    return DBDVoid.INSTANCE;
                 }
-                if (!isIndexedValue(parent, curValue)) {
+                remainingAttributes -= 1;
+                DBDAttributeBinding parent = Objects.requireNonNull(attribute.getParent(remainingAttributes));
+                try {
                     curValue = parent.extractNestedValue(curValue, 0);
-                } else if (nestedIndexes != null && isValidIndex(curValue, nestedIndexes[fixedNestedIndex])) {
-                    curValue = parent.extractNestedValue(curValue, nestedIndexes[fixedNestedIndex]);
-                    curNestedIndex++;
-                } else {
-                    curValue = parent.extractNestedValue(curValue, 0);
-                    continue;
+                } catch (DBException e) {
+                    return new DBDValueError(e);
                 }
-            } catch (Throwable e) {
-                return new DBDValueError(e);
             }
 
-            /*if (nestedIndexes == null || curNestedIndex >= nestedIndexes.length) {
-                break;
-            }*/
-        }
+            while (curValue instanceof DBDCollection collection) {
+                int itemIndex;
+                if (remainingIndices > 0) {
+                    itemIndex = nestedIndexes[nestedIndexes.length - remainingIndices];
+                    remainingIndices -= 1;
+                } else if (retrieveDeepestCollectionElement) {
+                    itemIndex = 0;
+                } else {
+                    return curValue;
+                }
+                if (itemIndex >= collection.getItemCount()) {
+                    return DBDVoid.INSTANCE;
+                }
+                curValue = collection.get(itemIndex);
+            }
 
-        while (nestedIndexes != null && curNestedIndex < nestedIndexes.length) {
-            if (curValue != null && isIndexedValue(attribute, curValue) && isValidIndex(curValue, nestedIndexes[curNestedIndex])) {
-                curValue = getValueElement(curValue, nestedIndexes[curNestedIndex]);
-                curNestedIndex++;
-            } else {
-                return DBDVoid.INSTANCE;
+            if (retrieveDeepestCollectionElement && remainingAttributes == 0) {
+                return curValue;
             }
         }
 
         return curValue;
-    }
-
-    private static boolean isIndexedValue(@NotNull DBDAttributeBinding attr, @NotNull Object value) {
-        return value instanceof List<?>
-            || value instanceof DBDComposite && !(value instanceof DBDDocument) && attr.getDataKind() == DBPDataKind.STRUCT;
-    }
-
-    private static boolean isValidIndex(@NotNull Object value, int index) {
-        return (!(value instanceof List<?>) || ((List<?>) value).size() > index)
-            && (!(value instanceof DBDComposite) || ((DBDComposite) value).getAttributeCount() > index);
-    }
-
-    @Nullable
-    private static Object getValueElement(@NotNull Object value, int index) {
-        if (value instanceof DBDComposite composite) {
-            final DBSAttributeBase attribute = composite.getAttributes()[index];
-
-            try {
-                return composite.getAttributeValue(attribute);
-            } catch (DBCException e) {
-                return new DBDValueError(e);
-            }
-        }
-
-        if (value instanceof List<?> && ((List<?>) value).size() > index) {
-            return ((List<?>) value).get(index);
-        }
-
-        return null;
     }
 
     @NotNull
