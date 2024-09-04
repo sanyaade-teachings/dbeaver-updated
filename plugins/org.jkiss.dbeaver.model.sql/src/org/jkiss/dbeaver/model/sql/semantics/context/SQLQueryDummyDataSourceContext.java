@@ -431,13 +431,19 @@ public class SQLQueryDummyDataSourceContext extends SQLQueryDataContext {
             null
         );
     }
-    
+
     @NotNull
     @Override
     public List<SQLQueryResultColumn> getColumnsList() {
         return Collections.emptyList();
     }
-    
+
+    @NotNull
+    @Override
+    public List<SQLQueryResultPseudoColumn> getPseudoColumnsList() {
+        return Collections.emptyList();
+    }
+
     @Override
     public DBSEntity findRealTable(@NotNull DBRProgressMonitor monitor, @NotNull List<String> tableName) {
         List<String> rawTableName = tableName.stream().map(this.dialect::getUnquotedIdentifier).toList();
@@ -457,7 +463,19 @@ public class SQLQueryDummyDataSourceContext extends SQLQueryDataContext {
     public SQLQueryResultColumn resolveColumn(@NotNull DBRProgressMonitor monitor, @NotNull String simpleName) {
         return null;
     }
-    
+
+    @Nullable
+    @Override
+    public SQLQueryResultPseudoColumn resolvePseudoColumn(DBRProgressMonitor monitor, @NotNull String name) {
+        return null;
+    }
+
+    @Nullable
+    @Override
+    public SQLQueryResultPseudoColumn resolveGlobalPseudoColumn(DBRProgressMonitor monitor, @NotNull String name) {
+        return null;
+    }
+
     @NotNull
     @Override
     public SQLDialect getDialect() {
@@ -474,7 +492,12 @@ public class SQLQueryDummyDataSourceContext extends SQLQueryDataContext {
     protected void collectKnownSourcesImpl(@NotNull KnownSourcesInfo result) {
         // no sources have been referenced yet, so nothing to register
     }
-    
+
+    @Override
+    protected List<SQLQueryResultPseudoColumn> prepareRowsetPseudoColumns(@NotNull SQLQueryRowsSourceModel source) {
+        return Collections.emptyList();
+    }
+
     public class DummyTableRowsSource extends SQLQueryRowsTableDataModel {
         
         public DummyTableRowsSource(@NotNull STMTreeNode syntaxNode) {
@@ -496,7 +519,7 @@ public class SQLQueryDummyDataSourceContext extends SQLQueryDataContext {
                     List<SQLQueryResultColumn> columns = this.prepareResultColumnsList(
                         this.getName().entityName, context, statistics, attributes
                     );
-                    context = context.overrideResultTuple(columns);
+                    context = context.overrideResultTuple(this, columns, Collections.emptyList());
                 }
             } catch (DBException ex) {
                 statistics.appendError(this.getName().entityName, "Failed to resolve table " + this.getName().toIdentifierString(), ex);

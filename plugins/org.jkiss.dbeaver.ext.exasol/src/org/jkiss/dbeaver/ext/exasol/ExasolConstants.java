@@ -48,12 +48,14 @@ public class ExasolConstants {
 
 
     public static final DBDPseudoAttribute PSEUDO_ATTR_ROWID = new DBDPseudoAttribute(
-            DBDPseudoAttributeType.ROWID,
-            "ROWID",
-            "$alias.ROWID",
-            null,
-            "Unique row identifier",
-            true);
+        DBDPseudoAttributeType.ROWID,
+        "ROWID",
+        "$alias.ROWID",
+        null,
+        "Unique row identifier",
+        true,
+        DBDPseudoAttribute.PropagationPolicy.TABLE_LOCAL
+    );
 
     public static final String TYPE_GEOMETRY = "GEOMETRY";
     public static final String TYPE_DECIMAL = "DECIMAL";
